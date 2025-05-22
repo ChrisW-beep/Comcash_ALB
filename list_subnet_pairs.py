@@ -1,20 +1,39 @@
-import boto3, json
+import boto3
+import json
 
-ec2 = boto3.client('ec2', region_name='us-east-1')
-subnets = ec2.describe_subnets()['Subnets']
+REGION = "us-east-1"
 
-# Group by Availability Zone
+# Initialize Boto3 EC2 client
+ec2 = boto3.client("ec2", region_name=REGION)
+subnets = ec2.describe_subnets()["Subnets"]
+
+# Group subnet IDs by Availability Zone
 az_map = {}
-for s in subnets:
-    az = s['AvailabilityZone']
-    az_map.setdefault(az, []).append(s['SubnetId'])
+for subnet in subnets:
+    az = subnet["AvailabilityZone"]
+    subnet_id = subnet["SubnetId"]
+    az_map.setdefault(az, []).append(subnet_id)
 
-# Output pairs as JSON list
-pairs = []
+# Sort AZs for consistency
 az_list = sorted(az_map.keys())
-for i in range(0, len(az_list) - 1, 2):
-    s1 = az_map[az_list[i]][0]
-    s2 = az_map[az_list[i+1]][0]
-    pairs.append([s1, s2])
 
-print(json.dumps(pairs))
+# Build labeled subnet pairs
+labeled_pairs = []
+
+# Handle pairs across AZs
+for i in range(0, len(az_list) - 1, 2):
+    az1, az2 = az_list[i], az_list[i + 1]
+    s1, s2 = az_map[az1][0], az_map[az2][0]
+    label = f'["{s1}", "{s2}"] ({az1} + {az2})'
+    labeled_pairs.append(label)
+
+# Optionally handle the last unpaired AZ
+if len(az_list) % 2 != 0:
+    last_az = az_list[-1]
+    if len(az_map[last_az]) >= 2:
+        s1, s2 = az_map[last_az][:2]
+        label = f'["{s1}", "{s2}"] ({last_az} + {last_az})'
+        labeled_pairs.append(label)
+
+# Output JSON list of labeled strings
+print(json.dumps(labeled_pairs))
